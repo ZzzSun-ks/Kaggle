@@ -1,11 +1,7 @@
 import pandas as pd
-import torch
-import torch.nn as nn
-from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
-from torch.utils.data import TensorDataset, DataLoader
 
 import config
 
@@ -58,60 +54,41 @@ def process():
                             by='machineID',
                             direction='forward').sort_values(['machineID','datetime']).reset_index(drop=True)
     dataset['RUL'] = (dataset['RUL'] - dataset['datetime']).dt.total_seconds() / (24 * 3600)
-    dataset['RUL'] = dataset['RUL'].fillna(365)
 
     # 划分数据集
     train, test = split_by_machine(dataset)
 
     # 特征预处理
-    numerical_features = ['volt', 'rotate', 'pressure', 'vibration']
-    categorical_features = ['errorID', 'comp']
+    train, test = split_by_machine(dataset, train_ratio=0.02)
 
-    numerical_transformer = Pipeline(
-        steps=[
-            ("fillna", SimpleImputer(strategy='mean')),
-            ("std", StandardScaler())
-            ]
-        )
-    
-    categorical_transformer = Pipeline(
-        steps=[
-            ("fillna", SimpleImputer(strategy="constant", fill_value="NaN")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore"))
-            ]
-        )
-    
+    # 特征预处理
+    nomodify = ['machineID', 'datetime', 'age']
+    label = ['model']
+    target = ['RUL']
+    numerical_features = [col for col in train.select_dtypes(include='float64').columns
+                        if col not in nomodify + label + target]
+    categorical_features = [col for col in train.select_dtypes(include='str').columns
+                            if col not in nomodify + label + target]
+
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", numerical_transformer, numerical_features),
-            ("cat", categorical_transformer, categorical_features)
+            ("", "passthrough", nomodify),
+            ("target", SimpleImputer(strategy="constant", fill_value=365), target),
+            ("label", OneHotEncoder(drop="first"), label),
+            ("num", StandardScaler(), numerical_features),
+            ("cat", OneHotEncoder(handle_unknown='ignore'), categorical_features)
             ]
         )
-    
-    x_train = pd.DataFrame(preprocessor.fit_transform(train), columns=preprocessor.get_feature_names_out())
-    x_test = pd.DataFrame(preprocessor.fit_transform(test), columns=preprocessor.get_feature_names_out())
-    y_train = train['RUL']
-    y_test = test['RUL']
 
-    train_dataset = TensorDataset(torch.tensor(x_train.values).float(), torch.tensor(y_train.values).float())
-    test_dataset = TensorDataset(torch.tensor(x_test.values).float(), torch.tensor(y_test.values).float())
+    preprocessor.fit(train)
+    train = pd.DataFrame(preprocessor.transform(train), columns=preprocessor.get_feature_names_out())
+    test = pd.DataFrame(preprocessor.transform(test), columns=preprocessor.get_feature_names_out())
 
     # 保存数据集
-    train_dataset.to_csv(config.PROCESSED_DATA_DIR / 'train.csv', index=False)
-    test_dataset.to_csv(config.PROCESSED_DATA_DIR / 'test.csv', index=False)
+    train.to_csv(config.PROCESSED_DATA_DIR / 'train.csv', index=False)
+    test.to_csv(config.PROCESSED_DATA_DIR / 'test.csv', index=False)
 
     print("Process finished")
-
-    return train_dataset, test_dataset, x_train.shape[1]
-
-
-train_dataset, train_dataset, feature_num = process()
-
-model = nn.Sequential(
-    nn.LSTM(feature_num,
-            config.HIDDEN_SIZE,
-            num_layers=1,
-            ))
 
 if __name__ == '__main__':
     process()
