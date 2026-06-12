@@ -1,3 +1,4 @@
 *.csv
 *.txt
 *.pdf
+.claude/settings.local.json
