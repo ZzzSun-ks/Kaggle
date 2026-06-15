@@ -1,0 +1,49 @@
+# ============================================================
+# NASA CMAPSS Turbofan — Predictive Maintenance Configuration
+# ============================================================
+
+data:
+  train_path: data/train_FD001.txt
+  test_path:  data/test_FD001.txt
+  # 如果存在真实 RUL 文件则加载，否则仅用训练集评估
+  rul_path:   data/RUL_FD001.txt
+
+columns:
+  index:    [unit, cycle]
+  settings: [setting_1, setting_2, setting_3]
+  sensors:  [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10,
+             s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21]
+
+# 特征工程
+features:
+  rul_clip: 125          # RUL 截断上限（cycles）
+  windows: [5, 10, 20, 30]  # 滑动窗口大小
+  # 传感器分组：A组与RUL正相关，B组负相关
+  group_pos: [s7, s12, s20, s21]
+  group_neg: [s2, s3, s4, s11, s15, s17]
+
+# 模型
+model:
+  type: xgboost
+  params:
+    n_estimators: 200
+    learning_rate: 0.05
+    max_depth: 5
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    random_state: 42
+    n_jobs: -1
+
+# 训练
+train:
+  test_size: 0.2         # 训练集中划分验证比例
+  early_stopping: 30
+  eval_metric: rmse
+
+# 推理
+inference:
+  model_path: models/xgb_rul.pkl
+  threshold_warning: 50   # RUL < 50 → 警告
+  threshold_critical: 20  # RUL < 20 → 严重

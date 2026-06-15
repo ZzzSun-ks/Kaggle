@@ -71,6 +71,7 @@ XGBoost 参数调优顺序 (按影响力从大到小):
     python tune.py 50       # 50次快速调参
 """
 
+import os
 import sys
 import numpy as np
 import pandas as pd
@@ -86,7 +87,7 @@ from feature_engineering import build_features
 # ============================================================================
 # 0. 配置
 # ============================================================================
-DATA_DIR = '../raw/CMaps'
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'raw', 'CMaps')
 COL_NAMES = (
     ['unit_number', 'time_cycles', 'setting_1', 'setting_2', 'setting_3']
     + [f's_{i}' for i in range(1, 22)]
